@@ -1,0 +1,11 @@
+node_modules/
+.next/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+# never commit face photos or raw API responses
+/photos/
+/scripts/gate0/out/
