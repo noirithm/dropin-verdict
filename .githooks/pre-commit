@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -eu
+fail() { echo "Blocked: $1" >&2; exit 1; }
+
+while IFS= read -r f; do
+  case "$f" in
+    .env.example|*/.env.example) ;;
+    .env|.env.*|*/.env|*/.env.*) fail "$f is an env file." ;;
+    photos/*|scripts/gate0/out/*) fail "$f is a photo or raw API output." ;;
+  esac
+done < <(git diff --cached --name-only)
+
+if [ -f .env ]; then
+  key="$(grep -E '^YOUCAM_API_KEY=' .env | cut -d= -f2- | tr -d '"' || true)"
+  if [ -n "$key" ]; then
+    diff="$(git diff --cached -U0)"
+    case "$diff" in *"$key"*) fail "API key value found in staged changes." ;; esac
+  fi
+fi
