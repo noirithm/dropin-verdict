@@ -140,7 +140,7 @@ async function uploadPhoto() {
 
 // ---- run ----
 console.log(`Base URL: ${BASE}`);
-const before = await balance('before');
+await balance('before');
 const costs = await api('GET', '/s2s/v2.0/credit/feature-cost?page_size=20');
 show('feature-cost (page 1)', costs);
 await save('feature-cost', costs.json);

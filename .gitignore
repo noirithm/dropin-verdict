@@ -9,3 +9,7 @@ dist/
 # never commit face photos or raw API responses
 /photos/
 /scripts/gate0/out/
+
+next-env.d.ts
+*.tsbuildinfo
+coverage/
