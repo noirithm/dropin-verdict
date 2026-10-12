@@ -1,8 +1,8 @@
-# Drop-In Verdict
+# ShadeWise
 
 **Know if a shade will suit you before you buy it.**
 
-Drop-In Verdict is a widget any beauty brand can add to a product page with one script tag. The shopper takes a selfie, the widget measures their skin tone, shows a foundation preview, and gives a clear verdict (good match, close match, poor match, or can't tell) with the reasons. If the photo isn't good enough to trust, it says so before spending anything and explains how to retake it.
+ShadeWise is a widget any beauty brand can add to a product page with one script tag. The shopper takes a selfie, the widget measures their skin tone, shows a foundation preview, and gives a clear verdict (good match, close match, poor match, or can't tell) with the reasons. If the photo isn't good enough to trust, it says so before spending anything and explains how to retake it.
 
 Built with the [YouCam API](https://yce.makeupar.com/ai-api) for the YouCam API Skin AI & eCommerce VTO Hackathon.
 
@@ -21,8 +21,8 @@ Built with the [YouCam API](https://yce.makeupar.com/ai-api) for the YouCam API 
 Requires Node 20.9 or newer.
 
 ```bash
-git clone git@github.com:noirithm/dropin-verdict.git
-cd dropin-verdict
+git clone git@github.com:noirithm/shadewise.git
+cd shadewise
 cp .env.example .env    # add your YouCam API key
 npm install
 npm run dev
