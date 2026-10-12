@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "data": {
+    "error": null,
+    "results": { "url": "https://example.invalid/result/<file>" },
+    "task_status": "success"
+  }
+}
