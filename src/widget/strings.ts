@@ -1,0 +1,26 @@
+export const S = {
+  openButton: "Check my shade match",
+  consentTitle: "Before we start",
+  consentIntro:
+    "ShadeWise measures your skin tone from one photo and shows how a shade is likely to look on you.",
+  consentPoints: [
+    "What we capture: one photo of your face, from your camera or an upload.",
+    "What is sent: the photo goes to our server, and from there to the YouCam API (Perfect Corp.) to measure skin tone and render a preview.",
+    "Storage: we do not store your photo. The YouCam API keeps uploads for up to 30 days per its documentation, and we cannot delete that copy.",
+    "Delete: use \"Delete my data\" at any time to clear this session on your device.",
+  ],
+  consentDisclaimer: "This is cosmetic guidance, not medical advice.",
+  agree: "I agree, continue",
+  decline: "No thanks",
+  sourceTitle: "Add your photo",
+  sourceHint: "Face the light, look straight at the camera, and keep your face in frame.",
+  useCamera: "Use camera",
+  uploadPhoto: "Upload a photo",
+  captureTitle: "Capture",
+  capturePlaceholder: "Photo capture is coming in the next step.",
+  budgetTitle: "Live checks are paused",
+  budgetBody: "We have reached today's limit for live checks. Please try again later.",
+  deleteData: "Delete my data",
+  deleted: "Your data on this device was deleted.",
+  close: "Close",
+} as const;

@@ -6,8 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "test": "vitest run --passWithNoTests"
+    "lint": "eslint src tests",
+    "test": "vitest run --passWithNoTests",
+    "build:widget": "esbuild src/widget/index.ts --bundle --minify --format=iife --target=es2020 --outfile=public/widget.js",
+    "prebuild": "npm run build:widget"
   },
   "dependencies": {
     "next": "16.4.0",
@@ -19,6 +21,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "typescript": "^5",
