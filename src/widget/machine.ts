@@ -55,10 +55,14 @@ export function reduce(state: WidgetState, event: WidgetEvent): WidgetState {
     case "capture":
       if (event.type === "CAMERA_DENIED") return { name: "capture", via: "upload" };
       if (event.type === "PHOTO_READY") return { name: "quality_check" };
+      if (event.type === "RETAKE") return { name: "source" };
+      if (event.type === "CHOOSE_UPLOAD") return { name: "capture", via: "upload" };
+      if (event.type === "CHOOSE_CAMERA") return { name: "capture", via: "camera" };
       return state;
     case "quality_check":
       if (event.type === "GATE_PASSED") return { name: "analyzing" };
       if (event.type === "GATE_FAILED") return { name: "refused", reasons: event.reasons };
+      if (event.type === "RETAKE") return { name: "source" };
       return state;
     case "analyzing":
       if (event.type === "ANALYSIS_DONE") return { name: "verdict" };
