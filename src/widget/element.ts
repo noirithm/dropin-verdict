@@ -1,4 +1,6 @@
 import { clearConsent, readConsent, saveConsent } from "./consent";
+import { fileToJpeg, renderToJpeg, type PreparedPhoto } from "./image";
+import { checkFileBasics, isTooSmall } from "./imageCheck";
 import { initialState, reduce, type WidgetEvent, type WidgetState } from "./machine";
 import { STYLES } from "./styles";
 import { S } from "./strings";
@@ -7,6 +9,8 @@ const SIMPLE_ACTIONS: Record<string, WidgetEvent> = {
   "consent-no": { type: "CONSENT_DECLINED" },
   camera: { type: "CHOOSE_CAMERA" },
   upload: { type: "CHOOSE_UPLOAD" },
+  back: { type: "RETAKE" },
+  retake: { type: "RETAKE" },
   close: { type: "RESET" },
 };
 
@@ -25,7 +29,7 @@ function card(title: string, body: string, buttons: string): string {
 const btn = (action: string, label: string, primary = false) =>
   `<button class="btn${primary ? " primary" : ""}" type="button" data-action="${action}">${label}</button>`;
 
-function view(state: WidgetState): string {
+function view(state: WidgetState, previewUrl: string | null): string {
   switch (state.name) {
     case "idle":
       return `<button class="btn primary" type="button" data-action="open" data-focus>${S.openButton}</button>`;
@@ -42,11 +46,29 @@ function view(state: WidgetState): string {
         btn("camera", S.useCamera, true) + btn("upload", S.uploadPhoto),
       );
     case "capture":
-      return card(S.captureTitle, `<p>${S.capturePlaceholder}</p>`, "");
+      return state.via === "camera"
+        ? card(
+            S.cameraTitle,
+            `<div class="stage"><video playsinline muted autoplay aria-label="Camera preview"></video></div><p class="note">${S.cameraHint}</p><p id="err" class="err" role="alert"></p>`,
+            `<button class="btn primary" type="button" data-action="snap" disabled>${S.takePhoto}</button>` +
+              btn("upload", S.uploadInstead) +
+              btn("back", S.back),
+          )
+        : card(
+            S.uploadTitle,
+            `<p>${S.uploadHint}</p><input id="file" type="file" accept="image/jpeg,image/png" hidden><p id="err" class="err" role="alert"></p>`,
+            btn("pick", S.chooseFile, true) + btn("back", S.back),
+          );
+    case "quality_check":
+      return card(
+        S.photoReadyTitle,
+        `<img class="preview" src="${previewUrl ?? ""}" alt="${S.previewAlt}"><p class="note">${S.photoReadyNote}</p>`,
+        btn("retake", S.retake, true),
+      );
     case "budget_exhausted":
       return card(S.budgetTitle, `<p>${S.budgetBody}</p>`, "");
     default:
-      return card(S.captureTitle, `<p>${S.capturePlaceholder}</p>`, "");
+      return card(S.laterTitle, `<p>${S.laterBody}</p>`, "");
   }
 }
 
@@ -55,6 +77,8 @@ export class ShadeWiseWidget extends HTMLElement {
   private panel!: HTMLDivElement;
   private live!: HTMLDivElement;
   private firstRender = true;
+  private stream: MediaStream | null = null;
+  private photo: { blob: Blob; url: string } | null = null; // memory only, never persisted
 
   connectedCallback(): void {
     if (this.shadowRoot) return;
@@ -63,10 +87,20 @@ export class ShadeWiseWidget extends HTMLElement {
     this.live = root.querySelector(".live") as HTMLDivElement;
     this.panel = root.querySelector(".panel") as HTMLDivElement;
     this.panel.addEventListener("click", (e) => this.onClick(e));
+    this.panel.addEventListener("change", (e) => {
+      const input = e.target as HTMLInputElement;
+      if (input.id === "file" && input.files?.[0]) void this.onFile(input.files[0], input);
+    });
     this.render();
   }
 
+  disconnectedCallback(): void {
+    this.stopCamera();
+    this.clearPhoto();
+  }
+
   private dispatch(event: WidgetEvent): void {
+    if (event.type === "RETAKE" || event.type === "RESET") this.clearPhoto();
     this.state = reduce(this.state, event);
     this.render();
   }
@@ -76,6 +110,86 @@ export class ShadeWiseWidget extends HTMLElement {
     setTimeout(() => {
       this.live.textContent = text;
     }, 50);
+  }
+
+  private setError(msg: string): void {
+    const el = this.panel.querySelector<HTMLElement>("#err");
+    if (el) el.textContent = msg;
+  }
+
+  private setPhoto(p: PreparedPhoto): void {
+    this.clearPhoto();
+    this.photo = { blob: p.blob, url: URL.createObjectURL(p.blob) };
+  }
+
+  private clearPhoto(): void {
+    if (this.photo) URL.revokeObjectURL(this.photo.url);
+    this.photo = null;
+  }
+
+  private stopCamera(): void {
+    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
+  }
+
+  private async startCamera(): Promise<void> {
+    this.stopCamera();
+    const video = this.panel.querySelector<HTMLVideoElement>("video");
+    if (!video) return;
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("camera unsupported");
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } },
+        audio: false,
+      });
+      const stillWanted =
+        video.isConnected && this.state.name === "capture" && this.state.via === "camera";
+      if (!stillWanted) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      this.stream = stream;
+      video.muted = true;
+      video.srcObject = stream;
+      await video.play();
+      this.panel.querySelector('[data-action="snap"]')?.removeAttribute("disabled");
+    } catch {
+      this.stopCamera();
+      if (this.state.name === "capture" && this.state.via === "camera") {
+        this.dispatch({ type: "CAMERA_DENIED" });
+        this.setError(S.cameraDenied);
+      }
+    }
+  }
+
+  private async snap(): Promise<void> {
+    const video = this.panel.querySelector<HTMLVideoElement>("video");
+    if (!video || !video.videoWidth) return;
+    try {
+      const photo = await renderToJpeg(video, video.videoWidth, video.videoHeight);
+      this.setPhoto(photo);
+      this.dispatch({ type: "PHOTO_READY" });
+    } catch {
+      this.setError(S.errRead);
+    }
+  }
+
+  private async onFile(file: File, input: HTMLInputElement): Promise<void> {
+    this.setError("");
+    try {
+      const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+      const problem = checkFileBasics(file.size, head);
+      if (problem === "unsupported") return this.setError(S.errUnsupported);
+      if (problem === "too_big") return this.setError(S.errTooBig);
+      const photo = await fileToJpeg(file);
+      if (isTooSmall(photo.srcWidth, photo.srcHeight)) return this.setError(S.errTooSmall);
+      this.setPhoto(photo);
+      this.dispatch({ type: "PHOTO_READY" });
+    } catch {
+      this.setError(S.errRead);
+    } finally {
+      input.value = ""; // lets the same file be chosen again
+    }
   }
 
   private onClick(e: Event): void {
@@ -93,13 +207,22 @@ export class ShadeWiseWidget extends HTMLElement {
       clearConsent();
       this.dispatch({ type: "RESET" });
       this.announce(S.deleted);
+    } else if (action === "pick") {
+      this.panel.querySelector<HTMLInputElement>("#file")?.click();
+    } else if (action === "snap") {
+      void this.snap();
     } else if (SIMPLE_ACTIONS[action]) {
       this.dispatch(SIMPLE_ACTIONS[action]);
     }
   }
 
   private render(): void {
-    this.panel.innerHTML = view(this.state);
+    this.panel.innerHTML = view(this.state, this.photo?.url ?? null);
+    if (this.state.name === "capture" && this.state.via === "camera") {
+      void this.startCamera();
+    } else {
+      this.stopCamera();
+    }
     if (this.firstRender) {
       this.firstRender = false;
       return;
