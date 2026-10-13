@@ -3,7 +3,7 @@ import { fileToJpeg, renderToJpeg, type PreparedPhoto } from "./image";
 import { checkFileBasics, isTooSmall } from "./imageCheck";
 import { initialState, reduce, type WidgetEvent, type WidgetState } from "./machine";
 import { STYLES } from "./styles";
-import { S } from "./strings";
+import { ERROR_COPY, REFUSED, S } from "./strings";
 
 const SIMPLE_ACTIONS: Record<string, WidgetEvent> = {
   "consent-no": { type: "CONSENT_DECLINED" },
@@ -13,6 +13,14 @@ const SIMPLE_ACTIONS: Record<string, WidgetEvent> = {
   retake: { type: "RETAKE" },
   close: { type: "RESET" },
 };
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 function card(title: string, body: string, buttons: string): string {
   return `<section class="card" aria-labelledby="t">
@@ -65,6 +73,16 @@ function view(state: WidgetState, previewUrl: string | null): string {
         `<img class="preview" src="${previewUrl ?? ""}" alt="${S.previewAlt}"><p class="note">${S.photoReadyNote}</p>`,
         btn("retake", S.retake, true),
       );
+    case "refused":
+      return card(
+        REFUSED.title,
+        `<p>${REFUSED.intro}</p><ul>${state.reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>`,
+        btn("retake", REFUSED.action, true),
+      );
+    case "error": {
+      const c = ERROR_COPY[state.code];
+      return card(c.title, `<p>${c.message}</p>`, btn("retake", c.action, true));
+    }
     case "budget_exhausted":
       return card(S.budgetTitle, `<p>${S.budgetBody}</p>`, "");
     default:
@@ -87,6 +105,9 @@ export class ShadeWiseWidget extends HTMLElement {
     this.live = root.querySelector(".live") as HTMLDivElement;
     this.panel = root.querySelector(".panel") as HTMLDivElement;
     this.panel.addEventListener("click", (e) => this.onClick(e));
+    this.panel.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this.state.name !== "idle") this.dispatch({ type: "RESET" });
+    });
     this.panel.addEventListener("change", (e) => {
       const input = e.target as HTMLInputElement;
       if (input.id === "file" && input.files?.[0]) void this.onFile(input.files[0], input);
@@ -97,6 +118,13 @@ export class ShadeWiseWidget extends HTMLElement {
   disconnectedCallback(): void {
     this.stopCamera();
     this.clearPhoto();
+  }
+
+  /** For the demo test page only: shows a non-result state so copy and layout can be reviewed. */
+  previewState(state: WidgetState): void {
+    if (state.name === "verdict") return; // results are never faked
+    this.state = state;
+    this.render();
   }
 
   private dispatch(event: WidgetEvent): void {
@@ -227,6 +255,7 @@ export class ShadeWiseWidget extends HTMLElement {
       this.firstRender = false;
       return;
     }
+    // Moving focus to the new screen's heading is what announces the change to screen readers.
     this.panel.querySelector<HTMLElement>("[data-focus]")?.focus();
   }
 }

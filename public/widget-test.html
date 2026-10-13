@@ -4,12 +4,45 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ShadeWise widget test</title>
-  <style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem}</style>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem}
+    .tools button{margin:0 .25rem .5rem 0;padding:.5rem .75rem;min-height:44px}
+  </style>
 </head>
 <body>
   <h1>Demo foundation, shade 04</h1>
   <p>Demo catalogue product.</p>
   <shadewise-widget product-id="demo-04"></shadewise-widget>
+
+  <h2>Preview failure screens (test page only)</h2>
+  <div class="tools">
+    <button data-s="refused">Refused</button>
+    <button data-s="unsupported_file">Unsupported file</button>
+    <button data-s="upload_failed">Upload failed</button>
+    <button data-s="timeout">Timeout</button>
+    <button data-s="api_error">API error</button>
+    <button data-s="rate_limited">Rate limited</button>
+    <button data-s="offline">Offline</button>
+    <button data-s="budget">Budget used up</button>
+  </div>
+
   <script src="/widget.js" defer></script>
+  <script>
+    window.addEventListener("DOMContentLoaded", function () {
+      document.querySelectorAll("[data-s]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var w = document.querySelector("shadewise-widget");
+          var s = b.dataset.s;
+          var state =
+            s === "refused"
+              ? { name: "refused", reasons: ["Move toward a window so your face is evenly lit.", "Hold the phone at eye level."] }
+              : s === "budget"
+              ? { name: "budget_exhausted" }
+              : { name: "error", code: s };
+          w.previewState(state);
+        });
+      });
+    });
+  </script>
 </body>
 </html>

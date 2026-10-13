@@ -1,3 +1,4 @@
+import type { ErrorCode } from "./machine";
 export const S = {
   openButton: "Check my shade match",
   consentTitle: "Before we start",
@@ -41,3 +42,42 @@ export const S = {
   deleted: "Your data on this device was deleted.",
   close: "Close",
 } as const;
+
+export const REFUSED = {
+  title: "Let's retake that photo",
+  intro: "We didn't use this photo because it may not give an accurate result. Here is what to fix:",
+  action: "Retake photo",
+} as const;
+
+export const ERROR_COPY: Record<ErrorCode, { title: string; message: string; action: string }> = {
+  unsupported_file: {
+    title: "We can't use that file",
+    message: "Please choose a JPG or PNG photo.",
+    action: "Choose another photo",
+  },
+  upload_failed: {
+    title: "The upload didn't go through",
+    message: "Your photo wasn't sent. Check your connection and try again.",
+    action: "Try again",
+  },
+  timeout: {
+    title: "This is taking too long",
+    message: "The check didn't finish in time. Please try again in a moment.",
+    action: "Try again",
+  },
+  api_error: {
+    title: "Something went wrong on our side",
+    message: "We couldn't complete the check. Please try again in a moment.",
+    action: "Try again",
+  },
+  rate_limited: {
+    title: "Lots of people are checking right now",
+    message: "Please wait a minute, then try again.",
+    action: "Try again",
+  },
+  offline: {
+    title: "You're offline",
+    message: "Check your internet connection, then try again.",
+    action: "Try again",
+  },
+};
