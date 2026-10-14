@@ -1,0 +1,15 @@
+export const TIPS = {
+  noFace: "We can't see a face. Face the camera and keep your whole face in the frame.",
+  multipleFaces: "We can see more than one face. Make sure only you are in the photo.",
+  tooFar: "Move closer so your face fills most of the frame.",
+  cropped: "Keep your whole face inside the frame, with a little space around it.",
+  yaw: "Look straight at the camera instead of turning your head.",
+  pitch: "Hold the phone at eye level, not tilted up or down.",
+  roll: "Keep your head level, without tilting it sideways.",
+  dark: "It's too dark. Move toward a window or a brighter room.",
+  brightSpots: "Part of your face is too bright. Step out of direct sun or lamp light.",
+  shadows: "Shadows cover part of your face. Face the light so it falls evenly.",
+  uneven: "Light is hitting one side of your face more than the other. Turn so the light is in front of you.",
+  blurry: "The photo looks blurry. Hold still, tap to focus, and try again.",
+  cast: "The light looks coloured. Use daylight or plain white light, and avoid filters.",
+} as const;
