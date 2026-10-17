@@ -41,9 +41,11 @@ const btn = (action: string, label: string, primary = false) =>
 interface Ctx {
   previewUrl: string | null;
   debugText: string | null;
+  autoFramed: boolean;
 }
 
 const preview = (c: Ctx) => `<img class="preview" src="${c.previewUrl ?? ""}" alt="${S.previewAlt}">`;
+const framedNote = (c: Ctx) => (c.autoFramed ? '<p class="note">' + S.autoFramedNote + "</p>" : "");
 const dbg = (c: Ctx) => (c.debugText ? `<pre class="debug">${escapeHtml(c.debugText)}</pre>` : "");
 
 function view(state: WidgetState, ctx: Ctx): string {
@@ -85,7 +87,7 @@ function view(state: WidgetState, ctx: Ctx): string {
     case "analyzing":
       return card(
         S.passedTitle,
-        `${preview(ctx)}<p>${S.passedBody}</p>${dbg(ctx)}`,
+        `${preview(ctx)}<p>${S.passedBody}</p>${framedNote(ctx)}${dbg(ctx)}`,
         btn("retake", S.retake, true),
       );
     case "refused":
@@ -114,6 +116,7 @@ export class ShadeWiseWidget extends HTMLElement {
   private photo: { blob: Blob; url: string } | null = null; // memory only, never persisted
   private gateRun = 0;
   private debugText: string | null = null;
+  private autoFramed = false;
 
   private get debugOn(): boolean {
     return this.hasAttribute("debug") || new URLSearchParams(location.search).has("gate-debug");
@@ -154,6 +157,7 @@ export class ShadeWiseWidget extends HTMLElement {
       this.gateRun++; // drop any check still running
       this.clearPhoto();
       this.debugText = null;
+      this.autoFramed = false;
     }
     this.state = reduce(this.state, event);
     this.render();
@@ -174,6 +178,11 @@ export class ShadeWiseWidget extends HTMLElement {
   private setPhoto(p: PreparedPhoto): void {
     this.clearPhoto();
     this.photo = { blob: p.blob, url: URL.createObjectURL(p.blob) };
+  }
+
+  private replacePhoto(blob: Blob): void {
+    this.clearPhoto();
+    this.photo = { blob, url: URL.createObjectURL(blob) };
   }
 
   private clearPhoto(): void {
@@ -255,6 +264,8 @@ export class ShadeWiseWidget extends HTMLElement {
     try {
       const report = await analyzePhoto(photo.blob);
       if (stale()) return;
+      if (report.photo) this.replacePhoto(report.photo);
+      this.autoFramed = !!report.autoFramed;
       this.debugText = this.debugOn ? JSON.stringify(report.debug, null, 2) : null;
       if (report.result.passed) {
         this.dispatch({ type: "GATE_PASSED" });
@@ -296,6 +307,7 @@ export class ShadeWiseWidget extends HTMLElement {
     this.panel.innerHTML = view(this.state, {
       previewUrl: this.photo?.url ?? null,
       debugText: this.debugText,
+      autoFramed: this.autoFramed,
     });
     if (this.state.name === "capture" && this.state.via === "camera") {
       void this.startCamera();

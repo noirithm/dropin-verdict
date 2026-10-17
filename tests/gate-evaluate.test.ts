@@ -94,7 +94,7 @@ describe("lighting and focus", () => {
     expect(evaluateGate(good({ imbalance: 0.55 })).tips).toContain(TIPS.uneven);
   });
   it("refuses motion blur and tells the shopper how to fix it", () => {
-    const r = evaluateGate(good({ motion: 0.47 }));
+    const r = evaluateGate(good({ edge: 0.15, motion: 0.47 }));
     expect(r.passed).toBe(false);
     expect(r.tips).toContain(TIPS.motion);
   });
@@ -174,5 +174,21 @@ describe("blur samples (real test photos, and a laptop-webcam-like softening)", 
     for (const s of [{ edge: 0.272, motion: 0.95 }, { edge: 0.237, motion: 0.98 }]) {
       expect(evaluateGate(good(s)).score).toBe(1);
     }
+  });
+});
+
+describe("motion blur needs two signals", () => {
+  it("passes a steady real webcam photo whose direction ratio read 0.607", () => {
+    const r = evaluateGate(good({ edge: 0.201, motion: 0.607 }));
+    expect(r.checks.find((c) => c.id === "motion_blur")?.status).toBe("pass");
+    expect(r.passed).toBe(true);
+  });
+  it("only warns when the ratio is low but the edges are crisp", () => {
+    const r = evaluateGate(good({ edge: 0.27, motion: 0.4 }));
+    expect(r.checks.find((c) => c.id === "motion_blur")?.status).toBe("warn");
+    expect(r.passed).toBe(true);
+  });
+  it("refuses when both signals say blur", () => {
+    expect(evaluateGate(good({ edge: 0.147, motion: 0.47 })).passed).toBe(false);
   });
 });

@@ -131,7 +131,11 @@ export function evaluateGate(input: GateInput): GateResult {
     add("sharpness", low(input.edge, Q.sharpness.warnBelow, Q.sharpness.failBelow), TIPS.soft);
   }
   if (input.motion !== undefined) {
-    add("motion_blur", low(input.motion, Q.motion.warnBelow, Q.motion.failBelow), TIPS.motion);
+    let m: Status = "pass";
+    if (input.motion < Q.motion.suspectBelow) {
+      m = input.edge !== undefined && input.edge < Q.motion.confirmEdgeBelow ? "fail" : "warn";
+    }
+    add("motion_blur", m, TIPS.motion);
   }
   if (input.cast) {
     const hueOff =

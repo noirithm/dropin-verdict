@@ -38,6 +38,7 @@ export const S = {
   checkingBody: "This takes a few seconds and happens on your device. Nothing has been sent yet.",
   passedTitle: "Your photo looks good",
   passedBody: "It passed the quality check. The skin analysis is built in the next gate.",
+  autoFramedNote: "We cropped the photo around your face so it fits the check. Nothing has been sent yet.",
   gateFallbackTip: "Please retake the photo in even, bright light, facing the camera.",
   laterTitle: "Coming soon",
   laterBody: "This step is built in a later gate.",

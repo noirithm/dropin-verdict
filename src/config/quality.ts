@@ -13,6 +13,7 @@ export const QUALITY = {
     minWidthPx: 100,
     edgeMarginFrac: 0.01, // face must sit inside the frame with this margin
   },
+  frame: { targetFaceFrac: 0.55, triggerBelowFrac: 0.5, minGain: 0.05, aspect: 0.75 }, // auto-crop: face fills about 55% of a 3:4 crop
   pose: { warnDeg: 6, failDeg: 10, pitchBiasDeg: 5 }, // straight-on photos read 3.7 to 8.3 degrees pitch // docs: front-facing within about 10 degrees
   exposure: {
     frameP98Fail: 90, // whole-frame 98th percentile luma (0-255). Samples: dark photo 67, good 185 to 199
@@ -28,7 +29,9 @@ export const QUALITY = {
   // plus emulated webcam softness. Edge crispness: sharp 0.24 to 0.27, webcam-like 0.16 to 0.20,
   // motion blur 0.15. Direction ratio (min/max gradient): sharp 0.95+, soft webcam 0.83+, motion blur 0.47.
   sharpness: { warnBelow: 0.17, failBelow: 0.1 },
-  motion: { warnBelow: 0.7, failBelow: 0.55 },
+  // The direction ratio alone is unreliable: a steady real webcam photo read 0.607 (natural lid and brow lines).
+  // So a low ratio is refused only when edge crispness is also low; on its own it just warns.
+  motion: { suspectBelow: 0.55, confirmEdgeBelow: 0.17 },
   cast: { hueMin: 15, hueMax: 85, maxChroma: 45, minChromaForHue: 6 }, // warn only
   score: { warnPenalty: 0.1, failPenalty: 0.35, minToProceed: 0.6, high: 0.9, medium: 0.7 },
 } as const;

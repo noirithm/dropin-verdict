@@ -1,12 +1,17 @@
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { assetUrl } from "../assets";
+import { CAPTURE } from "../../config/capture";
 import { evaluateGate, type GateResult } from "./evaluate";
+import { planFrameCrop, type Rect } from "./frame";
 import { blurStats, castStats, exposureStats, type BlurStats, type Pixels } from "./metrics";
-import { faceBox, poseFromLandmarks, type Pt } from "./pose";
+import { faceBox, poseFromLandmarks, type Box, type Pt } from "./pose";
 
 export interface GateReport {
   result: GateResult;
   debug: Record<string, number | string>;
+  framing?: { box: Box; width: number; height: number }; // present when exactly one face was found
+  photo?: Blob; // the cropped photo, when auto-framing replaced it
+  autoFramed?: boolean;
 }
 
 let landmarkerPromise: Promise<FaceLandmarker> | null = null;
@@ -146,8 +151,56 @@ export async function detectFaces(blob: Blob): Promise<GateReport> {
       confidence: result.confidence,
     };
     for (const c of result.checks) debug[`check:${c.id}`] = c.status;
-    return { result, debug };
+    return { result, debug, framing: { box, width: W, height: H } };
   } finally {
     bmp.close();
+  }
+}
+
+async function cropToJpeg(blob: Blob, r: Rect): Promise<Blob> {
+  const bmp = await createImageBitmap(blob);
+  try {
+    const c = document.createElement("canvas");
+    c.width = r.width;
+    c.height = r.height;
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("canvas unavailable");
+    ctx.drawImage(bmp, r.x, r.y, r.width, r.height, 0, 0, r.width, r.height);
+    return await new Promise<Blob>((resolve, reject) =>
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error("encode failed"))), "image/jpeg", CAPTURE.jpegQuality),
+    );
+  } finally {
+    bmp.close();
+  }
+}
+
+/** Check the photo; if the face is small but whole, crop around it and check the crop instead. */
+export async function analyzeWithAutoFrame(blob: Blob): Promise<GateReport> {
+  const first = await detectFaces(blob);
+  const f = first.framing;
+  const note = (s: string): GateReport => ({ ...first, debug: { ...first.debug, autoFrame: s } });
+  if (!f) return note("skipped: not exactly one face");
+  const rect = planFrameCrop(f.box, f.width, f.height);
+  if (!rect) {
+    const b = f.box;
+    return note(`no crop plan (face ${Math.round(b.width)}x${Math.round(b.height)} at ${Math.round(b.x)},${Math.round(b.y)} in ${f.width}x${f.height})`);
+  }
+  try {
+    const cropped = await cropToJpeg(blob, rect);
+    const second = await detectFaces(cropped);
+    if (!second.framing) return note(`crop ${rect.width}x${rect.height} made, but no single face found in it`);
+    return {
+      ...second,
+      photo: cropped,
+      autoFramed: true,
+      debug: {
+        autoFramed: "yes",
+        faceWidthFracBefore: round(f.box.width / f.width),
+        crop: `${rect.width}x${rect.height}`,
+        ...second.debug,
+      },
+    };
+  } catch (e) {
+    return note("crop failed: " + (e instanceof Error ? e.message : String(e)));
   }
 }
