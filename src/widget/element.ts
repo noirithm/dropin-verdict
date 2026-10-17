@@ -1,4 +1,5 @@
 import { clearConsent, readConsent, saveConsent } from "./consent";
+import { analyzePhoto } from "./gate/analyze";
 import { fileToJpeg, renderToJpeg, type PreparedPhoto } from "./image";
 import { checkFileBasics, isTooSmall } from "./imageCheck";
 import { initialState, reduce, type WidgetEvent, type WidgetState } from "./machine";
@@ -37,7 +38,15 @@ function card(title: string, body: string, buttons: string): string {
 const btn = (action: string, label: string, primary = false) =>
   `<button class="btn${primary ? " primary" : ""}" type="button" data-action="${action}">${label}</button>`;
 
-function view(state: WidgetState, previewUrl: string | null): string {
+interface Ctx {
+  previewUrl: string | null;
+  debugText: string | null;
+}
+
+const preview = (c: Ctx) => `<img class="preview" src="${c.previewUrl ?? ""}" alt="${S.previewAlt}">`;
+const dbg = (c: Ctx) => (c.debugText ? `<pre class="debug">${escapeHtml(c.debugText)}</pre>` : "");
+
+function view(state: WidgetState, ctx: Ctx): string {
   switch (state.name) {
     case "idle":
       return `<button class="btn primary" type="button" data-action="open" data-focus>${S.openButton}</button>`;
@@ -69,14 +78,20 @@ function view(state: WidgetState, previewUrl: string | null): string {
           );
     case "quality_check":
       return card(
-        S.photoReadyTitle,
-        `<img class="preview" src="${previewUrl ?? ""}" alt="${S.previewAlt}"><p class="note">${S.photoReadyNote}</p>`,
+        S.checkingTitle,
+        `${preview(ctx)}<p class="note">${S.checkingBody}</p>${dbg(ctx)}`,
+        btn("retake", S.retake),
+      );
+    case "analyzing":
+      return card(
+        S.passedTitle,
+        `${preview(ctx)}<p>${S.passedBody}</p>${dbg(ctx)}`,
         btn("retake", S.retake, true),
       );
     case "refused":
       return card(
         REFUSED.title,
-        `<p>${REFUSED.intro}</p><ul>${state.reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>`,
+        `<p>${REFUSED.intro}</p><ul>${state.reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>${dbg(ctx)}`,
         btn("retake", REFUSED.action, true),
       );
     case "error": {
@@ -97,6 +112,12 @@ export class ShadeWiseWidget extends HTMLElement {
   private firstRender = true;
   private stream: MediaStream | null = null;
   private photo: { blob: Blob; url: string } | null = null; // memory only, never persisted
+  private gateRun = 0;
+  private debugText: string | null = null;
+
+  private get debugOn(): boolean {
+    return this.hasAttribute("debug") || new URLSearchParams(location.search).has("gate-debug");
+  }
 
   connectedCallback(): void {
     if (this.shadowRoot) return;
@@ -116,6 +137,7 @@ export class ShadeWiseWidget extends HTMLElement {
   }
 
   disconnectedCallback(): void {
+    this.gateRun++;
     this.stopCamera();
     this.clearPhoto();
   }
@@ -128,7 +150,11 @@ export class ShadeWiseWidget extends HTMLElement {
   }
 
   private dispatch(event: WidgetEvent): void {
-    if (event.type === "RETAKE" || event.type === "RESET") this.clearPhoto();
+    if (event.type === "RETAKE" || event.type === "RESET") {
+      this.gateRun++; // drop any check still running
+      this.clearPhoto();
+      this.debugText = null;
+    }
     this.state = reduce(this.state, event);
     this.render();
   }
@@ -220,6 +246,28 @@ export class ShadeWiseWidget extends HTMLElement {
     }
   }
 
+  /** The free on-device gate. Nothing is sent anywhere. */
+  private async runGate(): Promise<void> {
+    const photo = this.photo;
+    if (!photo) return;
+    const run = ++this.gateRun;
+    const stale = () => run !== this.gateRun || this.state.name !== "quality_check";
+    try {
+      const report = await analyzePhoto(photo.blob);
+      if (stale()) return;
+      this.debugText = this.debugOn ? JSON.stringify(report.debug, null, 2) : null;
+      if (report.result.passed) {
+        this.dispatch({ type: "GATE_PASSED" });
+      } else {
+        const reasons = report.result.tips.length ? [...report.result.tips] : [S.gateFallbackTip];
+        this.dispatch({ type: "GATE_FAILED", reasons });
+      }
+    } catch {
+      if (stale()) return;
+      this.dispatch({ type: "GATE_UNAVAILABLE" });
+    }
+  }
+
   private onClick(e: Event): void {
     const target = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
     if (!target) return;
@@ -245,7 +293,10 @@ export class ShadeWiseWidget extends HTMLElement {
   }
 
   private render(): void {
-    this.panel.innerHTML = view(this.state, this.photo?.url ?? null);
+    this.panel.innerHTML = view(this.state, {
+      previewUrl: this.photo?.url ?? null,
+      debugText: this.debugText,
+    });
     if (this.state.name === "capture" && this.state.via === "camera") {
       void this.startCamera();
     } else {
@@ -257,6 +308,7 @@ export class ShadeWiseWidget extends HTMLElement {
     }
     // Moving focus to the new screen's heading is what announces the change to screen readers.
     this.panel.querySelector<HTMLElement>("[data-focus]")?.focus();
+    if (this.state.name === "quality_check") void this.runGate();
   }
 }
 

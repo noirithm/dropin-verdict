@@ -10,6 +10,7 @@ export const TIPS = {
   brightSpots: "Part of your face is too bright. Step out of direct sun or lamp light.",
   shadows: "Shadows cover part of your face. Face the light so it falls evenly.",
   uneven: "Light is hitting one side of your face more than the other. Turn so the light is in front of you.",
-  blurry: "The photo looks blurry. Hold still, tap to focus, and try again.",
+  soft: "The photo looks soft. Wipe the camera lens, hold still, and try again in brighter light.",
+  motion: "The photo looks smeared from movement. Hold still for a moment and try again.",
   cast: "The light looks coloured. Use daylight or plain white light, and avoid filters.",
 } as const;

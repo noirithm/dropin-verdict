@@ -4,7 +4,8 @@ export type ErrorCode =
   | "timeout"
   | "api_error"
   | "rate_limited"
-  | "offline";
+  | "offline"
+  | "check_unavailable";
 
 export type WidgetState =
   | { name: "idle" }
@@ -28,6 +29,7 @@ export type WidgetEvent =
   | { type: "PHOTO_READY" }
   | { type: "GATE_PASSED" }
   | { type: "GATE_FAILED"; reasons: string[] }
+  | { type: "GATE_UNAVAILABLE" }
   | { type: "ANALYSIS_DONE" }
   | { type: "ANALYSIS_FAILED"; code: ErrorCode }
   | { type: "BUDGET_EXHAUSTED" }
@@ -62,11 +64,13 @@ export function reduce(state: WidgetState, event: WidgetEvent): WidgetState {
     case "quality_check":
       if (event.type === "GATE_PASSED") return { name: "analyzing" };
       if (event.type === "GATE_FAILED") return { name: "refused", reasons: event.reasons };
+      if (event.type === "GATE_UNAVAILABLE") return { name: "error", code: "check_unavailable" };
       if (event.type === "RETAKE") return { name: "source" };
       return state;
     case "analyzing":
       if (event.type === "ANALYSIS_DONE") return { name: "verdict" };
       if (event.type === "ANALYSIS_FAILED") return { name: "error", code: event.code };
+      if (event.type === "RETAKE") return { name: "source" };
       return state;
     case "refused":
     case "error":

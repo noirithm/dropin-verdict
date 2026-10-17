@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ERROR_COPY, REFUSED } from "@/widget/strings";
 import { reduce } from "@/widget/machine";
 
-const CODES = ["api_error", "offline", "rate_limited", "timeout", "unsupported_file", "upload_failed"];
+const CODES = ["api_error", "check_unavailable", "offline", "rate_limited", "timeout", "unsupported_file", "upload_failed"];
 
 describe("error copy", () => {
   it("covers every error code", () => {

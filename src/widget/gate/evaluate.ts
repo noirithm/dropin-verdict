@@ -6,7 +6,7 @@ import { TIPS } from "./tips";
 export type Status = "pass" | "warn" | "fail";
 export type CheckId =
   | "face_count" | "face_size" | "framing" | "yaw" | "pitch" | "roll"
-  | "brightness" | "bright_spots" | "shadows" | "evenness" | "sharpness" | "colour_cast";
+  | "brightness" | "bright_spots" | "shadows" | "evenness" | "sharpness" | "motion_blur" | "colour_cast";
 
 export interface Check {
   id: CheckId;
@@ -23,7 +23,8 @@ export interface GateInput {
   face?: ExposureStats; // exposure of the face region
   frameP98?: number; // 98th percentile luma of the whole frame
   imbalance?: number;
-  sharpness?: number;
+  edge?: number; // eye-band edge crispness
+  motion?: number; // eye-band gradient direction ratio
   cast?: CastStats;
 }
 
@@ -126,8 +127,11 @@ export function evaluateGate(input: GateInput): GateResult {
   if (input.imbalance !== undefined) {
     add("evenness", high(input.imbalance, Q.evenness.warn, Q.evenness.fail), TIPS.uneven);
   }
-  if (input.sharpness !== undefined) {
-    add("sharpness", low(input.sharpness, Q.sharpness.warnBelow, Q.sharpness.failBelow), TIPS.blurry);
+  if (input.edge !== undefined) {
+    add("sharpness", low(input.edge, Q.sharpness.warnBelow, Q.sharpness.failBelow), TIPS.soft);
+  }
+  if (input.motion !== undefined) {
+    add("motion_blur", low(input.motion, Q.motion.warnBelow, Q.motion.failBelow), TIPS.motion);
   }
   if (input.cast) {
     const hueOff =

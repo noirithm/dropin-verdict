@@ -34,6 +34,11 @@ export const S = {
   photoReadyNote: "The photo quality check is built in the next gate.",
   previewAlt: "Preview of your photo",
   retake: "Retake",
+  checkingTitle: "Checking your photo",
+  checkingBody: "This takes a few seconds and happens on your device. Nothing has been sent yet.",
+  passedTitle: "Your photo looks good",
+  passedBody: "It passed the quality check. The skin analysis is built in the next gate.",
+  gateFallbackTip: "Please retake the photo in even, bright light, facing the camera.",
   laterTitle: "Coming soon",
   laterBody: "This step is built in a later gate.",
   budgetTitle: "Live checks are paused",
@@ -78,6 +83,11 @@ export const ERROR_COPY: Record<ErrorCode, { title: string; message: string; act
   offline: {
     title: "You're offline",
     message: "Check your internet connection, then try again.",
+    action: "Try again",
+  },
+  check_unavailable: {
+    title: "We couldn't check your photo",
+    message: "The photo check couldn't start. Check your connection and try again.",
     action: "Try again",
   },
 };

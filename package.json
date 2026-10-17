@@ -8,10 +8,13 @@
     "start": "next start",
     "lint": "eslint src tests",
     "test": "vitest run --passWithNoTests",
-    "build:widget": "esbuild src/widget/index.ts --bundle --minify --format=iife --target=es2020 --outfile=public/widget.js",
-    "prebuild": "npm run build:widget"
+    "build:widget": "rm -rf public/widget && esbuild src/widget/index.ts --bundle --minify --format=esm --splitting --target=es2020 --outdir=public/widget --chunk-names=chunks/[name]-[hash]",
+    "prebuild": "npm run setup:mediapipe && npm run build:widget",
+    "setup:mediapipe": "node scripts/setup-mediapipe.mjs",
+    "predev": "npm run setup:mediapipe && npm run build:widget"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.1.0",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { castStats, exposureStats, leftRightImbalance, sharpness, type Pixels } from "@/widget/gate/metrics";
+import { castStats, exposureStats, leftRightImbalance, blurStats, type Pixels } from "@/widget/gate/metrics";
 import { poseFromLandmarks, faceBox, LM, type Pt } from "@/widget/gate/pose";
 
 function make(w: number, h: number, fn: (x: number, y: number) => [number, number, number]): Pixels {
@@ -43,14 +43,51 @@ describe("leftRightImbalance", () => {
   });
 });
 
-describe("sharpness", () => {
-  const texture = (scale: number) => make(32, 32, (x) => { const v = (x % 2 ? 140 : 100) * scale; return [v, v, v]; });
-  it("scores a flat crop as zero and a textured crop as positive", () => {
-    expect(sharpness(solid([120, 120, 120]))).toBe(0);
-    expect(sharpness(texture(1))).toBeGreaterThan(0.01);
+function boxBlur(px: Pixels, kx: number, ky: number): Pixels {
+  const out = new Uint8ClampedArray(px.data.length);
+  for (let y = 0; y < px.height; y++) {
+    for (let x = 0; x < px.width; x++) {
+      let sum = 0;
+      let n = 0;
+      for (let dy = -ky; dy <= ky; dy++) {
+        for (let dx = -kx; dx <= kx; dx++) {
+          const xx = Math.min(px.width - 1, Math.max(0, x + dx));
+          const yy = Math.min(px.height - 1, Math.max(0, y + dy));
+          sum += px.data[(yy * px.width + xx) * 4];
+          n++;
+        }
+      }
+      const v = sum / n;
+      out.set([v, v, v, 255], (y * px.width + x) * 4);
+    }
+  }
+  return { data: out, width: px.width, height: px.height };
+}
+
+describe("blurStats", () => {
+  const grid = make(64, 64, (x, y) => {
+    const v = ((x >> 3) + (y >> 3)) % 2 ? 200 : 60;
+    return [v, v, v];
   });
-  it("does not depend on overall brightness, so dark skin is not scored as blurrier", () => {
-    expect(sharpness(texture(0.4))).toBeCloseTo(sharpness(texture(1)), 2);
+  it("reads a sharp pattern as crisp and non-directional", () => {
+    const s = blurStats(grid);
+    expect(s.edge).toBeGreaterThan(0.3);
+    expect(s.motion).toBeGreaterThan(0.9);
+  });
+  it("reads horizontal motion blur as directional", () => {
+    expect(blurStats(boxBlur(grid, 4, 0)).motion).toBeLessThan(0.5);
+  });
+  it("reads ordinary softness as less crisp but not directional, so soft webcams are not called motion blur", () => {
+    const soft = blurStats(boxBlur(grid, 2, 2));
+    expect(soft.edge).toBeLessThan(blurStats(grid).edge);
+    expect(soft.motion).toBeGreaterThan(0.9);
+  });
+  it("gives the same readings for a darker copy of the same picture (tone-neutral)", () => {
+    const dark = make(64, 64, (x, y) => {
+      const v = (((x >> 3) + (y >> 3)) % 2 ? 200 : 60) * 0.4;
+      return [v, v, v];
+    });
+    expect(blurStats(dark).edge).toBeCloseTo(blurStats(grid).edge, 1);
   });
 });
 

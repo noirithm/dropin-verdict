@@ -76,32 +76,39 @@ export function leftRightImbalance(px: Pixels): number {
   return Math.abs(ml - mr) / Math.max(ml, mr, 1);
 }
 
-/** Laplacian variance divided by mean luma squared, so dark skin isn't scored as "blurrier". */
-export function sharpness(px: Pixels): number {
+export interface BlurStats {
+  edge: number; // how crisp the strongest edges are, relative to the region's own contrast
+  motion: number; // min/max of horizontal vs vertical edge strength: low means directional (motion) blur
+}
+
+/** Run on the eye region. Both numbers are ratios, so they don't depend on skin tone or brightness. */
+export function blurStats(px: Pixels): BlurStats {
   const { width: w, height: h, data } = px;
-  if (w < 3 || h < 3) return 0;
+  if (w < 5 || h < 5) return { edge: 0, motion: 1 };
   const g = new Float32Array(w * h);
-  let meanY = 0;
-  for (let i = 0; i < w * h; i++) {
-    g[i] = luma(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
-    meanY += g[i];
-  }
-  meanY /= w * h;
-  let sum = 0;
-  let sumSq = 0;
-  let n = 0;
+  for (let i = 0; i < w * h; i++) g[i] = luma(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+  const n = (w - 2) * (h - 2);
+  const mag = new Float32Array(n);
+  const ax = new Float32Array(n);
+  const ay = new Float32Array(n);
+  let k = 0;
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;
-      const lap = 4 * g[i] - g[i - 1] - g[i + 1] - g[i - w] - g[i + w];
-      sum += lap;
-      sumSq += lap * lap;
-      n++;
+      const gx = (g[i - w + 1] + 2 * g[i + 1] + g[i + w + 1] - g[i - w - 1] - 2 * g[i - 1] - g[i + w - 1]) / 8;
+      const gy = (g[i + w - 1] + 2 * g[i + w] + g[i + w + 1] - g[i - w - 1] - 2 * g[i - w] - g[i - w + 1]) / 8;
+      ax[k] = Math.abs(gx);
+      ay[k] = Math.abs(gy);
+      mag[k] = Math.hypot(gx, gy);
+      k++;
     }
   }
-  const mean = sum / n;
-  const variance = sumSq / n - mean * mean;
-  return variance / (meanY * meanY + 1);
+  const range = percentile(Float32Array.from(g).sort(), 0.99) - percentile(Float32Array.from(g).sort(), 0.01) + 1;
+  const pMag = percentile(mag.sort(), 0.99);
+  const pX = percentile(ax.sort(), 0.99);
+  const pY = percentile(ay.sort(), 0.99);
+  const hi = Math.max(pX, pY);
+  return { edge: pMag / range, motion: hi < 1e-6 ? 1 : Math.min(pX, pY) / hi };
 }
 
 export interface CastStats {

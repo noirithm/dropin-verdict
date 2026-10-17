@@ -21,7 +21,8 @@ function good(over: Partial<GateInput> = {}): GateInput {
     pose: { yaw: 1, pitch: 1, roll: 1 },
     frameP98: 180,
     imbalance: 0.05,
-    sharpness: 0.01,
+    edge: 0.27,
+    motion: 0.95,
     ...over,
   };
 }
@@ -58,10 +59,10 @@ describe("face presence and size", () => {
     expect(none.score).toBe(0);
   });
   it("fails a small face and warns on a borderline one", () => {
-    const small = evaluateGate(good({ box: { x: 200, y: 300, width: 300, height: 400 } }));
+    const small = evaluateGate(good({ box: { x: 200, y: 300, width: 200, height: 300 } }));
     expect(small.passed).toBe(false);
     expect(small.tips).toContain(TIPS.tooFar);
-    const edge = evaluateGate(good({ box: { x: 100, y: 300, width: 420, height: 500 } })); // 63%
+    const edge = evaluateGate(good({ box: { x: 100, y: 300, width: 290, height: 420 } })); // 43%
     expect(edge.checks.find((c) => c.id === "face_size")?.status).toBe("warn");
     expect(edge.passed).toBe(true);
   });
@@ -92,10 +93,20 @@ describe("lighting and focus", () => {
     expect(evaluateGate(good({ face: { ...base, shadowFrac: 0.4 } })).tips).toContain(TIPS.shadows);
     expect(evaluateGate(good({ imbalance: 0.55 })).tips).toContain(TIPS.uneven);
   });
-  it("only warns on blur while the fail threshold is disabled", () => {
-    const r = evaluateGate(good({ sharpness: 0 }));
-    expect(r.checks.find((c) => c.id === "sharpness")?.status).toBe("warn");
-    expect(r.passed).toBe(true);
+  it("refuses motion blur and tells the shopper how to fix it", () => {
+    const r = evaluateGate(good({ motion: 0.47 }));
+    expect(r.passed).toBe(false);
+    expect(r.tips).toContain(TIPS.motion);
+  });
+  it("refuses a badly out-of-focus photo", () => {
+    const r = evaluateGate(good({ edge: 0.08 }));
+    expect(r.passed).toBe(false);
+    expect(r.tips).toContain(TIPS.soft);
+  });
+  it("only warns on a slightly soft photo", () => {
+    const soft = evaluateGate(good({ edge: 0.15 }));
+    expect(soft.checks.find((c) => c.id === "sharpness")?.status).toBe("warn");
+    expect(soft.passed).toBe(true);
   });
   it("only warns on a colour cast", () => {
     const r = evaluateGate(good({ cast: { chroma: 60, hue: 200 } }));
@@ -107,17 +118,17 @@ describe("lighting and focus", () => {
 describe("validity score and confidence", () => {
   it("is 1 with no problems and lowers confidence as warnings pile up", () => {
     expect(evaluateGate(good()).confidence).toBe("high");
-    const twoWarn = evaluateGate(good({ imbalance: 0.4, sharpness: 0 }));
+    const twoWarn = evaluateGate(good({ imbalance: 0.4, edge: 0.15 }));
     expect(twoWarn.score).toBe(0.8);
     expect(twoWarn.confidence).toBe("medium");
   });
   it("refuses when many small problems add up, even with no single failure", () => {
     const r = evaluateGate(
       good({
-        pose: { yaw: 7, pitch: 7, roll: 7 },
+        pose: { yaw: 7, pitch: 12, roll: 7 },
         imbalance: 0.4,
-        sharpness: 0,
-        box: { x: 100, y: 300, width: 420, height: 500 },
+        edge: 0.15,
+        box: { x: 100, y: 300, width: 290, height: 420 },
       }),
     );
     expect(r.checks.some((c) => c.status === "fail")).toBe(false);
@@ -128,5 +139,40 @@ describe("validity score and confidence", () => {
     const r = evaluateGate(good({ pose: { yaw: 12, pitch: 0, roll: 0 }, imbalance: 0.4 }));
     expect(r.tips[0]).toBe(TIPS.yaw);
     expect(new Set(r.tips).size).toBe(r.tips.length);
+  });
+});
+
+describe("calibration samples (numbers from real test photos)", () => {
+  it("refuses the very dark photo and says why", () => {
+    const r = evaluateGate(good({ frameP98: 67.4, pose: { yaw: -2.5, pitch: 8.3, roll: -4.1 } }));
+    expect(r.passed).toBe(false);
+    expect(r.tips).toContain(TIPS.dark);
+  });
+  it("passes the sharp, well-lit photo with the face at 52% of the width", () => {
+    const r = evaluateGate(
+      good({ frameP98: 198.5, pose: { yaw: -1.7, pitch: 5.3, roll: -0.4 }, box: { x: 80, y: 250, width: 350, height: 450 } }),
+    );
+    expect(r.passed).toBe(true);
+    expect(r.checks.find((c) => c.id === "pitch")?.status).toBe("pass");
+  });
+  it("treats typical selfie framing (face about 48% of the width) as fine", () => {
+    const r = evaluateGate(good({ box: { x: 80, y: 250, width: 320, height: 430 } }));
+    expect(r.checks.find((c) => c.id === "face_size")?.status).toBe("pass");
+  });
+});
+
+describe("blur samples (real test photos, and a laptop-webcam-like softening)", () => {
+  it("refuses the motion-blurred photo (edge 0.147, direction 0.47)", () => {
+    expect(evaluateGate(good({ edge: 0.147, motion: 0.47 })).passed).toBe(false);
+  });
+  it("passes a soft laptop-webcam-like photo with only a warning (edge 0.16, direction 0.92)", () => {
+    const r = evaluateGate(good({ edge: 0.16, motion: 0.92 }));
+    expect(r.passed).toBe(true);
+    expect(r.tips).toContain(TIPS.soft);
+  });
+  it("passes sharp photos, including a dark one, with no blur warning", () => {
+    for (const s of [{ edge: 0.272, motion: 0.95 }, { edge: 0.237, motion: 0.98 }]) {
+      expect(evaluateGate(good(s)).score).toBe(1);
+    }
   });
 });
